@@ -2,7 +2,7 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.0.1
+* @version 0.0.2
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 *
 * Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
@@ -39,7 +39,7 @@ class SmbSoapClient extends SoapClient {
 				"rating" => NULL,
 				"worst" => 1,
 				"best" => 5 ) ) );
-	private $smo = "";
+	private $smo = array( "smo" => array() );
 
 
 	public function __construct( $supplierId ) {
@@ -57,8 +57,12 @@ class SmbSoapClient extends SoapClient {
 	# Set SMO variables
 	#------------------
 
-	/*
+	/**
 	* Check if input is URI by seeing if it is either a URN or URL.
+	*
+	* @param string $uri URI to set.
+	* @see https://github.com/fkooman/php-urn-validator
+	* @see http://archive.mattfarina.com/2009/01/08/rfc-3986-url-validation/
 	*/
 	public function setResource( $uri ) {
 		$urnRE = '/^urn:[a-z0-9][a-z0-9-]{1,31}:([a-z0-9()+,-.:=@;$_!*\']|%(0[1-9a-f]|[1-9a-f][0-9a-f]))+$/i';
@@ -68,6 +72,7 @@ class SmbSoapClient extends SoapClient {
 			$this->setParameter( "info", $uri );
 		}
 	}
+
 	public function setComment( $comment ) {
 		if ( !empty( $comment ) ) {
 			$this->content = TRUE;
@@ -116,14 +121,14 @@ class SmbSoapClient extends SoapClient {
 	# SMB Soap actions
 	#------------------
 
-	public function insertSmo( $id = "" ) {
+	public function insert( $id = "" ) {
 		$this->createSmoRequest( $id );
-		
-		#$this->insertSMO();
-		#$this->__getLastResponse()
+		$xmlVar = new SoapVar( "<ns1:insertSMO>".$this->smo."</ns1:insertSMO>", XSD_ANYXML);
+		$this->insertSMO( $xmlVar );
+		print_r( $this->__getLastResponse() );
 	}
 
-	public function updateSmo( $id ) {
+	public function update( $id ) {
 		if ( empty( $id ) ) {
 			throw new InvalidArgumentException( "Use an existing SMO id." );
 		}
@@ -131,7 +136,7 @@ class SmbSoapClient extends SoapClient {
 		#$this->updateSMO();
 	}
 
-	public function deleteSmo( $id ) {
+	public function delete( $id ) {
 		if ( empty( $id ) ) {
 			throw new InvalidArgumentException( "Use an existing SMO id." );
 		}
@@ -150,37 +155,113 @@ class SmbSoapClient extends SoapClient {
 
 		$xmlstring = "<smd:smo xmlns:smd=\"http://xsd.kennisnet.nl/smd/1.0/\" xmlns:hreview=\"http://xsd.kennisnet.nl/smd/hreview/1.0/\">";
 		$xmlstring .= "<smd:supplierId>".$this->supplierId."</smd:supplierId>";
-		
+	
 		if ( !empty( $this->userId ) ) {
 			$xmlstring .= "<smd:userId>".$this->userId."</smd:userId>";
 		}
+
+		$xmlstring .= "<hreview:hReview>";
 
 		foreach( $this->smoValues["simple"] as $key => $value ) {
 			if ( !empty( $value ) ) {
 				$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
 			}
 		}
-		
+
 		if ( !is_null( $this->smoValues["complex"]["rating"]["rating"] ) ) {
 			foreach( $this->smoValues["complex"]["rating"] as $key => $value ) {
 				$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
 			}
 		}
+
+		$xmlstring .= "</hreview:hReview>";
+		$xmlstring .= "</smd:smo>";
 		$this->smo = $xmlstring;
+	}
+
+	/**
+	 * Loads raw xml (with different namespaces) into array. 
+	 * Keeps attributes without namespace or xml prefix.
+	 * 
+	 * @param object $xml SimpleXML object.
+	 * @return array $array XML array.
+	 * @see http://www.php.net/manual/en/ref.simplexml.php#52512
+	 */
+	private function load( $xml ) {
+		$fils = 0;
+		$array = array();
+
+		foreach( $this->namespaces as $uri => $prefix ) {   
+			foreach( $xml->children($uri) as $key => $value ) {   
+				$child = $this->load( $value );
+
+				// To deal with the attributes, 
+				// only works for attributes without a namespace, or in with xml namespace prefixes 
+				if (count( $value->attributes() ) > 0  || count( $value->attributes("xml", TRUE) ) > 0 ) {   
+					$child["@attributes"] = $this->getAttributes( $value );
+				}
+				// Also add the namespace when there is one
+				if ( !empty( $uri ) ) {   
+					$child["@namespace"] = $uri;
+				}
+
+				//Let see if the new child is not in the array
+				if( !in_array( $key, array_keys($array) ) ) {
+					$array[$key] = NULL;
+					$array[$key][] = $child;
+				}
+				else {   
+					//Add an element in an existing array
+					$array[$key][] = $child;
+				}
+
+				$fils++;
+			}
+		}
+
+		# no container, returning value
+		if ( $fils == 0 ) {
+			return array( (string) $xml );
+		}
+
+		return $array;
+	}
+
+	/**
+	 * Support function for XML load function. Returns
+	 * attribute parts for the XML array.
+	 *
+	 * @param object $xml SimpleXML object.
+	 * @return array $array XML array.
+	 */
+	private function getAttributes( $xml ) {
+		foreach( $xml->attributes() as $key => $value ) {
+			$arr[$key] = (string) current( $value );
+		}
+
+		foreach( $xml->attributes( "xml", TRUE ) as $key => $value ) {
+			$arr[$key][] = (string) current( $value );
+			$arr[$key]["@namespace"] = "http://www.w3.org/XML/1998/namespace";
+		}
+
+		return $arr;
 	}
 }
 
 
 
 
-$client = new SmbSoapClient( "kn" );
+$client = new SmbSoapClient( "skn" );
 
 $client->setResource( "urn:isbn:0-486-27557-4" );
 $client->setParameter( "version", "1.0" );
 $client->setComment( "this is ok" );
 $client->setRating( 0, -1, 5 );
 $client->setReviewer( "butts", "seymour", "", 1 );
-$client->insertSmo();
+$client->insert();
 
-print_r( $client );
+#print_r( $client );
+
+#print_r( $client->__getFunctions() );
+#var_dump( $client->__getTypes() );
 ?>
