@@ -2,7 +2,7 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.0.2
+* @version 0.0.3
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 *
 * Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
@@ -21,12 +21,19 @@
 */
 
 class SmbSoapClient extends SoapClient {
+	# soap client options
 	private $wsdl = "smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
 
+	# checks if either a rating, review or tag has been inserted
 	private $content = FALSE;
+
+	# contains some smo values
 	private $supplierId = "";
 	private $userId = "";
+	private $smoId = "";
+
+	# contains proprocessed smo values
 	private $smoValues = array(
 		"simple" => array(
 			"info" => "",
@@ -39,7 +46,15 @@ class SmbSoapClient extends SoapClient {
 				"rating" => NULL,
 				"worst" => 1,
 				"best" => 5 ) ) );
-	private $smo = array( "smo" => array() );
+
+	# holds generated smo xml string
+	private $smo = "";
+
+	# namespaces used in smb results
+	private $namespaces = array(
+		"http://schemas.xmlsoap.org/soap/envelope/" => "soapenv",
+		"http://xsd.kennisnet.nl/smd/1.0/" => "smd",
+		"http://xsd.kennisnet.nl/smd/hreview/1.0/" => "hreview" );
 
 
 	public function __construct( $supplierId ) {
@@ -123,9 +138,9 @@ class SmbSoapClient extends SoapClient {
 
 	public function insert( $id = "" ) {
 		$this->createSmoRequest( $id );
-		$xmlVar = new SoapVar( "<ns1:insertSMO>".$this->smo."</ns1:insertSMO>", XSD_ANYXML);
+		$xmlVar = new SoapVar( "<ns1:insertSMO>".$this->smo."</ns1:insertSMO>", XSD_ANYXML );
 		$this->insertSMO( $xmlVar );
-		print_r( $this->__getLastResponse() );
+		$this->processResponse( $this->__getLastResponse() );
 	}
 
 	public function update( $id ) {
@@ -177,6 +192,24 @@ class SmbSoapClient extends SoapClient {
 		$xmlstring .= "</hreview:hReview>";
 		$xmlstring .= "</smd:smo>";
 		$this->smo = $xmlstring;
+	}
+
+	private function processResponse( $xmlstring ) {
+		$xml = simplexml_load_string( $xmlstring );
+
+		if ( !is_object( $xml ) ) {
+			throw new UnexpectedValueException( "SMB response is not XML." );
+		}
+
+		$response = $this->load( $xml );
+		
+		if ( array_key_exists( "errorResponse", $response["Body"][0] ) ) {
+			$code = $response["Body"][0]["errorResponse"][0]["error"][0]["code"][0][0];
+			$msg = $response["Body"][0]["errorResponse"][0]["error"][0]["description"][0][0];
+			throw new DomainException( $msg." (".$code.")" );
+		}
+		
+		#print_r( $response );
 	}
 
 	/**
