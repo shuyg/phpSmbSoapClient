@@ -2,7 +2,7 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.0.4
+* @version 0.0.5
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 *
 * Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
@@ -24,6 +24,11 @@ class SmbSoapClient extends SoapClient {
 	# soap client options
 	private $wsdl = "smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
+
+	# regular expressions
+	const URLRE = "/^([a-z][a-z0-9\*\-\.]*):\/\/(?:(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+@)?(?:(?:[a-z0-9\-\.]|%[0-9a-f]{2})+|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\]))(?::[0-9]+)?(?:[\/|\?](?:[\w#!:\.\?\+=&@!$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/";
+	const URNRE = '/^urn:[a-z0-9][a-z0-9-]{1,31}:([a-z0-9()+,-.:=@;$_!*\']|%(0[1-9a-f]|[1-9a-f][0-9a-f]))+$/i';
+	const DATERE = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|(\+|-)\d{2}:\d{2})$/';
 
 	# checks if needed vars have been inserted
 	private $content = FALSE;
@@ -49,7 +54,11 @@ class SmbSoapClient extends SoapClient {
 			"rating" => array(
 				"rating" => NULL,
 				"worst" => 1,
-				"best" => 5 ) ) );
+				"best" => 5 ),
+			"tags" => array(),
+			"license" => array(
+				"description" => "",
+				"ref" => "" ) ) );
 
 	# holds generated smo xml string
 	private $smo = "";
@@ -104,10 +113,7 @@ class SmbSoapClient extends SoapClient {
 	* @see http://archive.mattfarina.com/2009/01/08/rfc-3986-url-validation/
 	*/
 	public function setResource( $uri ) {
-		$urnRE = '/^urn:[a-z0-9][a-z0-9-]{1,31}:([a-z0-9()+,-.:=@;$_!*\']|%(0[1-9a-f]|[1-9a-f][0-9a-f]))+$/i';
-		$urlRE = "/^([a-z][a-z0-9\*\-\.]*):\/\/(?:(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+@)?(?:(?:[a-z0-9\-\.]|%[0-9a-f]{2})+|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\]))(?::[0-9]+)?(?:[\/|\?](?:[\w#!:\.\?\+=&@!$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/";
-
-		if ( preg_match( $urnRE, $uri ) || preg_match( $urlRE, $uri ) ) {
+		if ( preg_match( self::URNRE, $uri ) || preg_match( self::URLRE, $uri ) ) {
 			$this->resource = TRUE;
 			$this->setParameter( "info", $uri );
 		}
@@ -121,11 +127,27 @@ class SmbSoapClient extends SoapClient {
 	}
 
 	public function setRating( $rating, $worst, $best ) {
-		if ( is_numeric( $rating ) && is_numeric( $worst ) && is_numeric( $best ) && $rating >= $worst && $rating <= $best ) {
+		if ( $this->validateRating( $rating, $worst, $best ) ) {
 			$this->content = TRUE;
 			$this->smoValues["complex"]["rating"]["rating"] = $rating;
 			$this->smoValues["complex"]["rating"]["worst"] = $worst;
 			$this->smoValues["complex"]["rating"]["best"] = $best;
+		}
+	}
+
+	public function setTag( $name, $ref = "", $rating = 0, $worst = 0, $best = 0 ) {
+		if ( !empty( $name ) ) {
+			$this->content = TRUE;
+			$tag["name"] = $name;
+			if ( $this->validateRating( $rating, $worst, $best ) ) {
+				$tag["rating"] = $rating;
+				$tag["worst"] = $worst;
+				$tag["best"] = $best;
+			}
+			if ( preg_match( self::URLRE, $ref ) ) {
+				$tag["ref"] = $ref;
+			}
+			$this->smoValues["complex"]["tags"][] = $tag;
 		}
 	}
 
@@ -162,13 +184,22 @@ class SmbSoapClient extends SoapClient {
 	* @param datetime $date The insert datetime.
 	*/
 	public function setDate( $date ) {
-		$dateRE = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|(\+|-)\d{2}:\d{2})$/';
-		if ( !preg_match( $dateRE, $date ) ) {
+		if ( !preg_match( self::DATERE, $date ) ) {
 			throw new InvalidArgumentException( "Not a valid date: ".$date );
 		}
 		$this->setParameter( "dtreviewed", $date );
 	}
-	
+
+	public function setLicense( $description, $ref = "" ) {
+		if ( !empty( $description ) ) {
+			$this->smoValues["complex"]["license"]["description"] = $description;
+
+			if ( preg_match( self::URLRE, $ref ) ) {
+				$this->smoValues["complex"]["license"]["ref"] = $ref;
+			}
+		}
+	}
+
 	/**
 	* Generic function to set a simple parameter (no tags for instance).
 	*
@@ -251,6 +282,31 @@ class SmbSoapClient extends SoapClient {
 			}
 		}
 
+		if ( count( $this->smoValues["complex"]["tags"] ) > 0 ) {
+			$xmlstring .= "<hreview:tags>";
+			foreach( $this->smoValues["complex"]["tags"] as $tag ) {
+				$xmlstring .= "<hreview:tag>";
+				$xmlstring .= "<hreview:name>".$tag["name"]."</hreview:name>";
+				if ( array_key_exists( "ref", $tag  ) ) {
+					$xmlstring .= "<hreview:ref>".$tag["ref"]."</hreview:ref>";
+				}
+				if ( array_key_exists( "rating", $tag ) ) {
+					$xmlstring .= "<hreview:rating hreview:worst=\"".$tag["worst"]."\" hreview:best=\"".$tag["best"]."\">".$tag["rating"]."</hreview:rating>";
+				}
+				$xmlstring .= "</hreview:tag>";
+			}
+			$xmlstring .= "</hreview:tags>";
+		}
+
+		if ( !empty( $this->smoValues["complex"]["license"]["description"] ) ) {
+			$xmlstring .= "<hreview:license>";
+			$xmlstring .= "<hreview:description>".$this->smoValues["complex"]["license"]["description"]."</hreview:description>";
+			if ( !empty( $this->smoValues["complex"]["license"]["ref"] ) ) {
+				$xmlstring .= "<hreview:ref>".$this->smoValues["complex"]["license"]["ref"]."</hreview:ref>";
+			}
+			$xmlstring .= "</hreview:license>";
+		}
+
 		$xmlstring .= "</hreview:hReview>";
 		$xmlstring .= "</smd:smo>";
 		$this->smo = $xmlstring;
@@ -279,6 +335,23 @@ class SmbSoapClient extends SoapClient {
 		}
 		
 		# Set smoID from response SMO
+	}
+
+	/**
+	* Validates a rating triplet.
+	*
+	* @param numeric $rating Rating
+	* @param numeric $worst Low end of scale.
+	* @param numeric $best High end of scale.
+	* @return bool Whether it validates or not.
+	*/
+	private function validateRating( $rating, $worst, $best ) {
+		if ( is_numeric( $rating ) && is_numeric( $worst ) && is_numeric( $best ) && $rating >= $worst && $rating <= $best && $worst != $best ) {
+			return TRUE;
+		}
+		else {
+			return FALSE;
+		}
 	}
 
 	/**
