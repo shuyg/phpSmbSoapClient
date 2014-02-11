@@ -2,7 +2,7 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.0.3
+* @version 0.0.4
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 *
 * Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
@@ -25,8 +25,9 @@ class SmbSoapClient extends SoapClient {
 	private $wsdl = "smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
 
-	# checks if either a rating, review or tag has been inserted
+	# checks if needed vars have been inserted
 	private $content = FALSE;
+	private $resource = FALSE;
 
 	# contains some smo values
 	private $supplierId = "";
@@ -40,7 +41,10 @@ class SmbSoapClient extends SoapClient {
 			"summary" => "",
 			"version" => "",
 			"reviewer" => "",
-			"description" => "" ),
+			"description" => "",
+			"dtreviewed" => "",
+			"type" => "",
+			"permalink" => "" ),
 		"complex" => array(
 			"rating" => array(
 				"rating" => NULL,
@@ -73,6 +77,26 @@ class SmbSoapClient extends SoapClient {
 	#------------------
 
 	/**
+	* Sets the smoId. For SMB this should be prefixed by
+	* "supplierId.". If this is not the case, this function
+	* will do that.
+	*
+	* @param string $id ID to set.
+	*/
+	public function setSmoId( $id ) {
+		if ( empty( $id ) ) {
+			throw new InvalidArgumentException( "Use a non empty SMO ID." );
+		}
+		
+		if ( substr( $id, 0, strlen( $this->supplierId ) + 1 ) == $this->supplierId."." ) {
+			$this->smoId = $id;
+		}
+		else {
+		    $this->smoId = $this->supplierId.".".$id;
+		}
+	}
+
+	/**
 	* Check if input is URI by seeing if it is either a URN or URL.
 	*
 	* @param string $uri URI to set.
@@ -84,6 +108,7 @@ class SmbSoapClient extends SoapClient {
 		$urlRE = "/^([a-z][a-z0-9\*\-\.]*):\/\/(?:(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+@)?(?:(?:[a-z0-9\-\.]|%[0-9a-f]{2})+|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\]))(?::[0-9]+)?(?:[\/|\?](?:[\w#!:\.\?\+=&@!$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/";
 
 		if ( preg_match( $urnRE, $uri ) || preg_match( $urlRE, $uri ) ) {
+			$this->resource = TRUE;
 			$this->setParameter( "info", $uri );
 		}
 	}
@@ -104,6 +129,10 @@ class SmbSoapClient extends SoapClient {
 		}
 	}
 
+	/**
+	* Creates a vCard with FN, and optionally a N and ORG.
+	* Also, sets an optional SMO userId.
+	*/
 	public function setReviewer( $name, $firstname = "", $organisation = "", $id = "" ) {
 		if ( !empty( $id ) ) {
 			$this->userId = $id;
@@ -126,6 +155,26 @@ class SmbSoapClient extends SoapClient {
 		}
 	}
 
+	/**
+	* Validates for the correct format. Using this function only
+	* works for inserts. Updates always use the current datetime.
+	*
+	* @param datetime $date The insert datetime.
+	*/
+	public function setDate( $date ) {
+		$dateRE = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|(\+|-)\d{2}:\d{2})$/';
+		if ( !preg_match( $dateRE, $date ) ) {
+			throw new InvalidArgumentException( "Not a valid date: ".$date );
+		}
+		$this->setParameter( "dtreviewed", $date );
+	}
+	
+	/**
+	* Generic function to set a simple parameter (no tags for instance).
+	*
+	* @param string $key SMO field name.
+	* @param string $value SMO field value.
+	*/
 	public function setParameter( $key, $value ) {
 		if ( array_key_exists( $key, $this->smoValues["simple"] ) && !empty( $value ) ) {
 			$this->smoValues["simple"][$key] = $value;
@@ -136,36 +185,46 @@ class SmbSoapClient extends SoapClient {
 	# SMB Soap actions
 	#------------------
 
-	public function insert( $id = "" ) {
-		$this->createSmoRequest( $id );
+	public function insert() {
+		if ( empty( $this->smoValues["simple"]["dtreviewed"] ) ) {
+			$this->setParameter( "dtreviewed", date('c') );
+		}
+		$this->createSmoRequest();
 		$xmlVar = new SoapVar( "<ns1:insertSMO>".$this->smo."</ns1:insertSMO>", XSD_ANYXML );
 		$this->insertSMO( $xmlVar );
 		$this->processResponse( $this->__getLastResponse() );
 	}
 
-	public function update( $id ) {
-		if ( empty( $id ) ) {
-			throw new InvalidArgumentException( "Use an existing SMO id." );
+	public function update() {
+		if ( empty( $this->smoId ) ) {
+			throw new UnexpectedValueException( "Use an existing SMO id." );
 		}
-		
-		#$this->updateSMO();
+
+		$this->setParameter( "dtreviewed", date('c') );
+		$this->createSmoRequest();
+		$xmlVar = new SoapVar( "<ns1:updateSMO>".$this->smo."</ns1:updateSMO>", XSD_ANYXML );
+		$this->updateSMO( $xmlVar );
+		$this->processResponse( $this->__getLastResponse() );
 	}
 
-	public function delete( $id ) {
-		if ( empty( $id ) ) {
-			throw new InvalidArgumentException( "Use an existing SMO id." );
+	public function delete() {
+		if ( empty( $this->smoId) ) {
+			throw new UnexpectedValueException( "Use an existing SMO id." );
 		}
-		
-		#$this->deleteSMO();
+
+		$this->createSmoRequest();
+		$xmlVar = new SoapVar( "<ns1:deleteSMO>".$this->smo."</ns1:deleteSMO>", XSD_ANYXML );
+		$this->deleteSMO( $xmlVar );
+		$this->processResponse( $this->__getLastResponse() );
 	}
 
 	#------------------
 	# Other functions
 	#------------------
 
-	private function createSmoRequest( $id ) {
-		if ( !$this->content ) {
-			throw new UnexpectedValueException( "Provide at least a comment, rating or tag." );
+	private function createSmoRequest() {
+		if ( !$this->content || !$this->resource ) {
+			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
 		}
 
 		$xmlstring = "<smd:smo xmlns:smd=\"http://xsd.kennisnet.nl/smd/1.0/\" xmlns:hreview=\"http://xsd.kennisnet.nl/smd/hreview/1.0/\">";
@@ -173,6 +232,9 @@ class SmbSoapClient extends SoapClient {
 	
 		if ( !empty( $this->userId ) ) {
 			$xmlstring .= "<smd:userId>".$this->userId."</smd:userId>";
+		}
+		if ( !empty( $this->smoId ) ) {
+			$xmlstring .= "<smd:smoId>".$this->smoId."</smd:smoId>";
 		}
 
 		$xmlstring .= "<hreview:hReview>";
@@ -194,6 +256,13 @@ class SmbSoapClient extends SoapClient {
 		$this->smo = $xmlstring;
 	}
 
+	/**
+	* Processes SMB response to a request and primarily checks if
+	* there were no errors. In case of an insertSMO, sets the smoId
+	* returned by SMB in case there was no smoID to begin with.
+	*
+	* @param string $xmlstring The raw xml response.
+	*/
 	private function processResponse( $xmlstring ) {
 		$xml = simplexml_load_string( $xmlstring );
 
@@ -209,7 +278,7 @@ class SmbSoapClient extends SoapClient {
 			throw new DomainException( $msg." (".$code.")" );
 		}
 		
-		#print_r( $response );
+		# Set smoID from response SMO
 	}
 
 	/**
@@ -280,21 +349,4 @@ class SmbSoapClient extends SoapClient {
 		return $arr;
 	}
 }
-
-
-
-
-$client = new SmbSoapClient( "skn" );
-
-$client->setResource( "urn:isbn:0-486-27557-4" );
-$client->setParameter( "version", "1.0" );
-$client->setComment( "this is ok" );
-$client->setRating( 0, -1, 5 );
-$client->setReviewer( "butts", "seymour", "", 1 );
-$client->insert();
-
-#print_r( $client );
-
-#print_r( $client->__getFunctions() );
-#var_dump( $client->__getTypes() );
 ?>

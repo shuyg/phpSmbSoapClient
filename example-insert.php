@@ -1,0 +1,18 @@
+<?php
+require_once("smbsoapclient.php");
+date_default_timezone_set('Europe/Amsterdam');
+
+$client = new SmbSoapClient( "skn" );
+
+$client->setSmoId( "smbphp.1" );
+$client->setResource( "urn:isbn:0-486-27557-4" );
+$client->setParameter( "version", "1.0" );
+$client->setDate( "2014-02-11T11:59:42+01:00" );
+$client->setComment( "this is ok" );
+$client->setRating( 0, -1, 5 );
+$client->setReviewer( "butts", "seymour", "", 1 );
+$client->insert();
+
+print_r( $client );
+
+?>
