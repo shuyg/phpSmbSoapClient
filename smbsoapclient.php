@@ -2,9 +2,12 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.0.5
+* @version 0.1
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
-*
+* @example example-insert.php
+* @example example-update.php
+* @example example-delete.php
+* 
 * Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
 *
 * This program is free software: you can redistribute it and/or modify
@@ -22,7 +25,7 @@
 
 class SmbSoapClient extends SoapClient {
 	# soap client options
-	private $wsdl = "smd.wsdl";
+	private $wsdl = "http://www.kennisnet.nl/wsdl/smd/1.0/smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
 
 	# regular expressions
@@ -33,6 +36,9 @@ class SmbSoapClient extends SoapClient {
 	# checks if needed vars have been inserted
 	private $content = FALSE;
 	private $resource = FALSE;
+	
+	# action check
+	private $action = "";
 
 	# contains some smo values
 	private $supplierId = "";
@@ -119,6 +125,11 @@ class SmbSoapClient extends SoapClient {
 		}
 	}
 
+	/**
+	* Sets comment in hReview:description.
+	*
+	* @param string $comment Text review.
+	*/
 	public function setComment( $comment ) {
 		if ( !empty( $comment ) ) {
 			$this->content = TRUE;
@@ -126,6 +137,13 @@ class SmbSoapClient extends SoapClient {
 		}
 	}
 
+	/**
+	* Sets a rating within a certain scale.
+	*
+	* @param numeric $rating Rating within scale.
+	* @param numeric $worst Lowend of scale.
+	* @param numeric $best Highend of scale.
+	*/
 	public function setRating( $rating, $worst, $best ) {
 		if ( $this->validateRating( $rating, $worst, $best ) ) {
 			$this->content = TRUE;
@@ -135,6 +153,15 @@ class SmbSoapClient extends SoapClient {
 		}
 	}
 
+	/**
+	* Sets a tag with optional reference url and rating.
+	*
+	* @param string $name Name of the tag.
+	@ @param url $ref Reference url for tag.
+	* @param numeric $rating Rating of tag within scale.
+	* @param numeric $worst Lowend of scale.
+	* @param numeric $best Highend of scale.
+	*/
 	public function setTag( $name, $ref = "", $rating = 0, $worst = 0, $best = 0 ) {
 		if ( !empty( $name ) ) {
 			$this->content = TRUE;
@@ -216,21 +243,38 @@ class SmbSoapClient extends SoapClient {
 	# SMB Soap actions
 	#------------------
 
+	/**
+	* Insert set SMO and process response.
+	* Needs to have a content part and a resource. If dtreviewed
+	* is empty, this is set to current timestamp.
+	*/
 	public function insert() {
+		if ( !$this->content || !$this->resource ) {
+			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
+		}
 		if ( empty( $this->smoValues["simple"]["dtreviewed"] ) ) {
 			$this->setParameter( "dtreviewed", date('c') );
 		}
+
+		$this->action = "insert";
 		$this->createSmoRequest();
 		$xmlVar = new SoapVar( "<ns1:insertSMO>".$this->smo."</ns1:insertSMO>", XSD_ANYXML );
 		$this->insertSMO( $xmlVar );
 		$this->processResponse( $this->__getLastResponse() );
 	}
 
+	/**
+	* Update set SMO and process response.
+	* Needs to have an id, content part and a resource.
+	*/
 	public function update() {
 		if ( empty( $this->smoId ) ) {
 			throw new UnexpectedValueException( "Use an existing SMO id." );
 		}
-
+		if ( !$this->content || !$this->resource ) {
+			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
+		}
+		$this->action = "update";
 		$this->setParameter( "dtreviewed", date('c') );
 		$this->createSmoRequest();
 		$xmlVar = new SoapVar( "<ns1:updateSMO>".$this->smo."</ns1:updateSMO>", XSD_ANYXML );
@@ -238,11 +282,16 @@ class SmbSoapClient extends SoapClient {
 		$this->processResponse( $this->__getLastResponse() );
 	}
 
+	/**
+	* Delete set SMO and process response.
+	* Needs to have an id.
+	*/
 	public function delete() {
 		if ( empty( $this->smoId) ) {
 			throw new UnexpectedValueException( "Use an existing SMO id." );
 		}
 
+		$this->action = "delete";
 		$this->createSmoRequest();
 		$xmlVar = new SoapVar( "<ns1:deleteSMO>".$this->smo."</ns1:deleteSMO>", XSD_ANYXML );
 		$this->deleteSMO( $xmlVar );
@@ -253,11 +302,10 @@ class SmbSoapClient extends SoapClient {
 	# Other functions
 	#------------------
 
+	/**
+	* Creates an SMO xml string from all set variables.
+	*/
 	private function createSmoRequest() {
-		if ( !$this->content || !$this->resource ) {
-			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
-		}
-
 		$xmlstring = "<smd:smo xmlns:smd=\"http://xsd.kennisnet.nl/smd/1.0/\" xmlns:hreview=\"http://xsd.kennisnet.nl/smd/hreview/1.0/\">";
 		$xmlstring .= "<smd:supplierId>".$this->supplierId."</smd:supplierId>";
 	
@@ -268,46 +316,49 @@ class SmbSoapClient extends SoapClient {
 			$xmlstring .= "<smd:smoId>".$this->smoId."</smd:smoId>";
 		}
 
-		$xmlstring .= "<hreview:hReview>";
+		# no hReview in a delete request
+		if ( $this->action != "delete" ) {
+			$xmlstring .= "<hreview:hReview>";
 
-		foreach( $this->smoValues["simple"] as $key => $value ) {
-			if ( !empty( $value ) ) {
-				$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
-			}
-		}
-
-		if ( !is_null( $this->smoValues["complex"]["rating"]["rating"] ) ) {
-			foreach( $this->smoValues["complex"]["rating"] as $key => $value ) {
-				$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
-			}
-		}
-
-		if ( count( $this->smoValues["complex"]["tags"] ) > 0 ) {
-			$xmlstring .= "<hreview:tags>";
-			foreach( $this->smoValues["complex"]["tags"] as $tag ) {
-				$xmlstring .= "<hreview:tag>";
-				$xmlstring .= "<hreview:name>".$tag["name"]."</hreview:name>";
-				if ( array_key_exists( "ref", $tag  ) ) {
-					$xmlstring .= "<hreview:ref>".$tag["ref"]."</hreview:ref>";
+			foreach( $this->smoValues["simple"] as $key => $value ) {
+				if ( !empty( $value ) ) {
+					$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
 				}
-				if ( array_key_exists( "rating", $tag ) ) {
-					$xmlstring .= "<hreview:rating hreview:worst=\"".$tag["worst"]."\" hreview:best=\"".$tag["best"]."\">".$tag["rating"]."</hreview:rating>";
+			}
+
+			if ( !is_null( $this->smoValues["complex"]["rating"]["rating"] ) ) {
+				foreach( $this->smoValues["complex"]["rating"] as $key => $value ) {
+					$xmlstring .= "<hreview:".$key.">".$value."</hreview:".$key.">";
 				}
-				$xmlstring .= "</hreview:tag>";
 			}
-			$xmlstring .= "</hreview:tags>";
-		}
 
-		if ( !empty( $this->smoValues["complex"]["license"]["description"] ) ) {
-			$xmlstring .= "<hreview:license>";
-			$xmlstring .= "<hreview:description>".$this->smoValues["complex"]["license"]["description"]."</hreview:description>";
-			if ( !empty( $this->smoValues["complex"]["license"]["ref"] ) ) {
-				$xmlstring .= "<hreview:ref>".$this->smoValues["complex"]["license"]["ref"]."</hreview:ref>";
+			if ( count( $this->smoValues["complex"]["tags"] ) > 0 ) {
+				$xmlstring .= "<hreview:tags>";
+				foreach( $this->smoValues["complex"]["tags"] as $tag ) {
+					$xmlstring .= "<hreview:tag>";
+					$xmlstring .= "<hreview:name>".$tag["name"]."</hreview:name>";
+					if ( array_key_exists( "ref", $tag  ) ) {
+						$xmlstring .= "<hreview:ref>".$tag["ref"]."</hreview:ref>";
+					}
+					if ( array_key_exists( "rating", $tag ) ) {
+						$xmlstring .= "<hreview:rating hreview:worst=\"".$tag["worst"]."\" hreview:best=\"".$tag["best"]."\">".$tag["rating"]."</hreview:rating>";
+					}
+					$xmlstring .= "</hreview:tag>";
+				}
+				$xmlstring .= "</hreview:tags>";
 			}
-			$xmlstring .= "</hreview:license>";
-		}
 
-		$xmlstring .= "</hreview:hReview>";
+			if ( !empty( $this->smoValues["complex"]["license"]["description"] ) ) {
+				$xmlstring .= "<hreview:license>";
+				$xmlstring .= "<hreview:description>".$this->smoValues["complex"]["license"]["description"]."</hreview:description>";
+				if ( !empty( $this->smoValues["complex"]["license"]["ref"] ) ) {
+					$xmlstring .= "<hreview:ref>".$this->smoValues["complex"]["license"]["ref"]."</hreview:ref>";
+				}
+				$xmlstring .= "</hreview:license>";
+			}
+
+			$xmlstring .= "</hreview:hReview>";
+		}
 		$xmlstring .= "</smd:smo>";
 		$this->smo = $xmlstring;
 	}
@@ -333,8 +384,11 @@ class SmbSoapClient extends SoapClient {
 			$msg = $response["Body"][0]["errorResponse"][0]["error"][0]["description"][0][0];
 			throw new DomainException( $msg." (".$code.")" );
 		}
-		
+
 		# Set smoID from response SMO
+		if ( $this->action == "insert" ) {
+			$this->smoId = $response["Body"][0]["response"][0]["responseSmo"][0]["smo"][0]["smoId"][0][0];
+		}
 	}
 
 	/**
