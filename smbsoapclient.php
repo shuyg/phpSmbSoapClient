@@ -2,13 +2,13 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.1
+* @version 0.2
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 * @example example-insert.php
 * @example example-update.php
 * @example example-delete.php
 * 
-* Copyright 2014 Wim Muskee <wimmuskee@gmail.com>
+* Copyright 2014-2015 Wim Muskee <wimmuskee@gmail.com>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -112,6 +112,17 @@ class SmbSoapClient extends SoapClient {
 	}
 
 	/**
+	* Sets the userId.
+	*
+	* @param string $userid userID to set.
+	*/
+	public function setUserId( $userid ) {
+		if ( !empty( trim( $userid ) ) ) {
+			$this->userId = $userid;
+		}
+	}
+
+	/**
 	* Check if input is URI by seeing if it is either a URN or URL.
 	*
 	* @param string $uri URI to set.
@@ -180,10 +191,10 @@ class SmbSoapClient extends SoapClient {
 
 	/**
 	* Creates a vCard with FN, and optionally a N and ORG.
-	* Also, sets an optional SMO userId.
+	* Also, sets an optional SMO userId if not set already.
 	*/
 	public function setReviewer( $name, $firstname = "", $organisation = "", $id = "" ) {
-		if ( !empty( $id ) ) {
+		if ( !empty( $id ) && empty( $this->userId ) ) {
 			$this->userId = $id;
 		}
 
@@ -200,6 +211,16 @@ class SmbSoapClient extends SoapClient {
 				$vcard .= "ORG:".$organisation."&#xA;";
 			}
 			$vcard .= "END:VCARD";
+			$this->setParameter( "reviewer", $vcard );
+		}
+	}
+
+	/**
+	* Sets a raw vcard in the reviewer field.
+	* Rather validate this first.
+	*/
+	public function setReviewerVcard( $vcard ) {
+		if ( !empty( $vcard ) ) {
 			$this->setParameter( "reviewer", $vcard );
 		}
 	}
@@ -298,6 +319,19 @@ class SmbSoapClient extends SoapClient {
 		$this->processResponse( $this->__getLastResponse() );
 	}
 
+	/**
+	* Print the SMO for debugging purposes.
+	*/
+	public function debugprint( $type ) {
+		switch( $type ) {
+			case "update":
+			$this->setParameter( "dtreviewed", date('c') );
+			break;
+		}
+		$this->createSmoRequest();
+		print_r( $this->smo );
+	}
+	
 	#------------------
 	# Other functions
 	#------------------
