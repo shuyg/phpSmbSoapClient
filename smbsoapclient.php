@@ -2,14 +2,14 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.2
+* @version 0.3
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 * @example example-insert.php
 * @example example-update.php
 * @example example-delete.php
 * @author Wim Muskee <wimmuskee@gmail.com>
 * 
-* Copyright 2014-2015 Stichting Kennisnet
+* Copyright 2014-2016 Stichting Kennisnet
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -304,6 +304,23 @@ class SmbSoapClient extends SoapClient {
 		}
 		$this->action = "update";
 		$this->setParameter( "dtreviewed", date('c') );
+		$this->createSmoRequest();
+		$xmlVar = new SoapVar( "<ns1:updateSMO>".$this->smo."</ns1:updateSMO>", XSD_ANYXML );
+		$this->updateSMO( $xmlVar );
+		$this->processResponse( $this->__getLastResponse() );
+	}
+	
+	/**
+	* Special update for migrations, use set dtreviewd
+	*/
+	public function migrate() {
+		if ( empty( $this->smoId ) ) {
+			throw new UnexpectedValueException( "Use an existing SMO id." );
+		}
+		if ( !$this->content || !$this->resource ) {
+			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
+		}
+		$this->action = "update";
 		$this->createSmoRequest();
 		$xmlVar = new SoapVar( "<ns1:updateSMO>".$this->smo."</ns1:updateSMO>", XSD_ANYXML );
 		$this->updateSMO( $xmlVar );
