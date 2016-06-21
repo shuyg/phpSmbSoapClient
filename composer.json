@@ -1,0 +1,11 @@
+{
+    "name": "kennisnet/phpSmbSoapClient",
+    "description": "PHP client for submitting SMO data to Edurep via SOAP.",
+    "homepage": "https://github.com/kennisnet/phpSmbSoapClient",
+    "license": "MIT",
+    "require": {
+        "php": ">=5.3.0",
+        "ext-soap": "*",
+        "ext-simplexml": "*"
+    }
+}
