@@ -2,7 +2,7 @@
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.3
+* @version 0.4
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 * @example example-insert.php
 * @example example-update.php
@@ -83,14 +83,18 @@ class SmbSoapClient extends SoapClient {
 		"http://xsd.kennisnet.nl/smd/hreview/1.0/" => "hreview" );
 
 
-	public function __construct( $supplierId ) {
+	public function __construct( $supplierId, $staging = FALSE ) {
 		if ( !empty( $supplierId ) ) {
 			$this->supplierId = $supplierId;
 		}
 		else {
 			throw new InvalidArgumentException( "Use a valid SMB supplierId." );
 		}
-
+		
+		if ( $staging ) {
+			$this->wsdl = "http://wsdl.kennisnet.nl/smd/1.0/smd-staging.wsdl";
+		}
+		
 		parent::__construct( $this->wsdl, $this->soapOptions );
 	}
 
