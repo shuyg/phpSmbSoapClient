@@ -6,3 +6,7 @@ Requirements:
 
 Usage:
 View the example files for the insert, update and delete calls for details using this package.
+
+Versions:
+ - The 0.4 version and below are based on old-style pre-PSR-4 packaging.
+ - The versions above that are compliant with new PHP packaging styles.
