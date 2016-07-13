@@ -1,4 +1,7 @@
 <?php
+namespace Some\Other\Name;
+use Kennisnet\SmbSoapClient;
+
 /**
 * Mapping SMO's from one info url to another.
 * The CSV contains two columns, source and target info.
@@ -8,8 +11,8 @@
 * 2015-2016 Wim Muskee
 * version 1.0
 */
+
 require_once("../phpEdurepSearch/edurepsearch.php");
-require_once("smbsoapclient.php");
 
 date_default_timezone_set('Europe/Amsterdam');
 

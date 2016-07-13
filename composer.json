@@ -1,5 +1,5 @@
 {
-    "name": "kennisnet/phpSmbSoapClient",
+    "name": "kennisnet/SmbSoapClient",
     "description": "PHP client for submitting SMO data to Edurep via SOAP.",
     "homepage": "https://github.com/kennisnet/phpSmbSoapClient",
     "license": "MIT",
@@ -7,5 +7,10 @@
         "php": ">=5.3.0",
         "ext-soap": "*",
         "ext-simplexml": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Kennisnet\\SmbSoapClient\\": "src"
+        }
     }
 }

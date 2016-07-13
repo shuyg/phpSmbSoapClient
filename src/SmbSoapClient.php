@@ -1,14 +1,23 @@
 <?php
+namespace Kennisnet\SmbSoapClient;
+
+use \SoapVar;
+use \InvalidArgumentException;
+use \UnexpectedValueException;
+use \DomainException;
+
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.4
+* @version 0.5
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
-* @example example-insert.php
-* @example example-update.php
-* @example example-delete.php
+* @example examples/example-insert.php
+* @example examples/example-update.php
+* @example examples/example-delete.php
+* @example examples/example-migrate.php
 * @author Wim Muskee <wimmuskee@gmail.com>
-* 
+* @author S. Huijg <s.huijg@kennisnet.nl>
+*
 * Copyright 2014-2016 Stichting Kennisnet
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,7 +39,7 @@
 * SOFTWARE.
 */
 
-class SmbSoapClient extends SoapClient {
+class SmbSoapClient extends \SoapClient {
 	# soap client options
 	private $wsdl = "http://wsdl.kennisnet.nl/smd/1.0/smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
@@ -179,7 +188,7 @@ class SmbSoapClient extends SoapClient {
 	* Sets a tag with optional reference url and rating.
 	*
 	* @param string $name Name of the tag.
-	@ @param url $ref Reference url for tag.
+	* @param url $ref Reference url for tag.
 	* @param numeric $rating Rating of tag within scale.
 	* @param numeric $worst Lowend of scale.
 	* @param numeric $best Highend of scale.
