@@ -92,7 +92,7 @@ class SmbSoapClient extends \SoapClient {
 		"http://xsd.kennisnet.nl/smd/hreview/1.0/" => "hreview" );
 
 
-	public function __construct( $supplierId, $staging = FALSE ) {
+	public function __construct( $supplierId, $staging = FALSE, $soapOptions = array() ) {
 		if ( !empty( $supplierId ) ) {
 			$this->supplierId = $supplierId;
 		}
@@ -104,7 +104,7 @@ class SmbSoapClient extends \SoapClient {
 			$this->wsdl = "http://wsdl.kennisnet.nl/smd/1.0/smd-staging.wsdl";
 		}
 		
-		parent::__construct( $this->wsdl, $this->soapOptions );
+		parent::__construct( $this->wsdl, array_merge ( $this->soapOptions, $soapOptions ) );
 	}
 
 	#------------------
