@@ -9,7 +9,7 @@ use \DomainException;
 /**
 * PHP package for submitting SMO records via SOAP to Edurep.
 *
-* @version 0.6
+* @version 0.7
 * @link http://developers.wiki.kennisnet.nl/index.php/Edurep:Hoofdpagina
 * @example examples/example-insert.php
 * @example examples/example-update.php
@@ -43,6 +43,7 @@ class SmbSoapClient extends \SoapClient {
 	# soap client options
 	private $wsdl = "http://wsdl.kennisnet.nl/smd/1.0/smd.wsdl";
 	private $soapOptions = array( "trace" => 1 );
+	const WSDL_STAGING = "http://wsdl.kennisnet.nl/smd/1.0/smd-staging.wsdl";
 
 	# regular expressions
 	const URLRE = "/^([a-z][a-z0-9\*\-\.]*):\/\/(?:(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+@)?(?:(?:[a-z0-9\-\.]|%[0-9a-f]{2})+|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\]))(?::[0-9]+)?(?:[\/|\?](?:[\w#!:\.\?\+=&@!$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/";
@@ -92,7 +93,14 @@ class SmbSoapClient extends \SoapClient {
 		"http://xsd.kennisnet.nl/smd/hreview/1.0/" => "hreview" );
 
 
-	public function __construct( $supplierId, $staging = FALSE, $soapOptions = array() ) {
+	/**
+	* Load the class.
+	*
+	* @param string $supplierId A valid whitelisted supplierId is required to connect to the server.
+	* @param string $wsdl Allow for using a local wsdl, or the staging url constant. Production url is default.
+	* @param array $soapOptions Set some other soap options, like a proxy.
+	*/
+	public function __construct( $supplierId, $wsdl = "", $soapOptions = array() ) {
 		if ( !empty( $supplierId ) ) {
 			$this->supplierId = $supplierId;
 		}
@@ -100,8 +108,8 @@ class SmbSoapClient extends \SoapClient {
 			throw new InvalidArgumentException( "Use a valid SMB supplierId." );
 		}
 		
-		if ( $staging ) {
-			$this->wsdl = "http://wsdl.kennisnet.nl/smd/1.0/smd-staging.wsdl";
+		if ( !empty( $wsdl ) ) {
+			$this->wsdl = $wsdl;
 		}
 		
 		parent::__construct( $this->wsdl, array_merge ( $this->soapOptions, $soapOptions ) );
