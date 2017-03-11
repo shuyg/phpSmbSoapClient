@@ -60,7 +60,11 @@ foreach( $csv as $row ) {
 				$client->setParameter( $field, htmlspecialchars($sourcesmo[$field]) );
 			}
 		}
-		
+
+    if (!empty($sourcesmo["dtreviewed"])) {
+      $client->setDate($sourcesmo["dtreviewed"]);
+    }
+
 		if ( !empty( $sourcesmo["reviewer"] ) ) {
 			$client->setReviewerVcard( $sourcesmo["reviewer"] );
 		}
@@ -70,12 +74,12 @@ foreach( $csv as $row ) {
 			
 			# never tested license
 			print_r( $sourcesmo );
-			$client->debugprint( "update" );
+			$client->debugprint( "migrate" );
 			exit;
 		}
 		
 		#	print_r( $sourcesmo );
-		#	$client->debugprint( "update" );
+		#	$client->debugprint( "migrate" );
 		#	exit;
 		
 		$client->migrate();
