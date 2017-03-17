@@ -341,10 +341,10 @@ class SmbSoapClient extends \SoapClient {
 		if ( !$this->content || !$this->resource ) {
 			throw new UnexpectedValueException( "Provide at least a comment, rating or tag and a resource." );
 		}
-		if (isset($this->smoValues["dtreviewed"])) {
-			if (empty($this->smoValues["dtreviewed"])) {
-				if (!preg_match(self::DATERE, $this->smoValues["dtreviewed"])) {
-					throw new InvalidArgumentException("Not a valid date: " . $this->smoValues["dtreviewed"]);
+		if (isset($this->smoValues["simple"]["dtreviewed"])) {
+			if (empty($this->smoValues["simple"]["dtreviewed"])) {
+				if (!preg_match(self::DATERE, $this->smoValues["simple"]["dtreviewed"])) {
+					throw new InvalidArgumentException("Not a valid date: " . $this->smoValues["simple"]["dtreviewed"]);
 				}
 			}
 		} else {
