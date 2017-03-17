@@ -343,6 +343,8 @@ class SmbSoapClient extends \SoapClient {
 		}
 		if (isset($this->smoValues["simple"]["dtreviewed"])) {
 			if (empty($this->smoValues["simple"]["dtreviewed"])) {
+				throw new InvalidArgumentException("Empty date");
+			} else {
 				if (!preg_match(self::DATERE, $this->smoValues["simple"]["dtreviewed"])) {
 					throw new InvalidArgumentException("Not a valid date: " . $this->smoValues["simple"]["dtreviewed"]);
 				}
